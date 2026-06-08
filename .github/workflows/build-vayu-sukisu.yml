@@ -1,4 +1,4 @@
-name: Build for Poco X3 Pro (vayu) with SukiSU-Ultra (Final)
+name: Build for Poco X3 Pro (vayu) with SukiSU-Ultra (Final Fix)
 on:
   workflow_dispatch:
 
@@ -13,11 +13,11 @@ jobs:
           sudo update-alternatives --install /usr/bin/aarch64-linux-gnu-gcc aarch64-linux-gnu-gcc /usr/bin/aarch64-linux-gnu-gcc-9 100
           sudo update-alternatives --set aarch64-linux-gnu-gcc /usr/bin/aarch64-linux-gnu-gcc-9
 
-      - name: Clone kernel source (your fork, branch 16)
+      - name: Clone kernel source
         run: |
           git clone --depth=1 https://github.com/RUOK488/android_kernel_vayu -b 16 kernel
 
-      - name: Patch compiler_types.h (fix __has_attribute error)
+      - name: Patch compiler_types.h
         run: |
           cd kernel
           echo '#ifndef __has_attribute' > include/linux/compiler_types.h.new
@@ -26,38 +26,40 @@ jobs:
           cat include/linux/compiler_types.h >> include/linux/compiler_types.h.new
           mv include/linux/compiler_types.h.new include/linux/compiler_types.h
 
-      - name: Remove broken touchscreen driver (spi-xiaomi-tp)
+      - name: Remove broken touchscreen driver completely
         run: |
           cd kernel
-          # Delete the source file that requires missing header
+          # Remove the source file
           rm -f drivers/input/touchscreen/spi-xiaomi-tp.c
-          # Also disable the config option (safety)
+          # Remove the entry from Makefile
+          sed -i '/spi-xiaomi-tp/d' drivers/input/touchscreen/Makefile
+          # Disable config option
           sed -i 's/^CONFIG_SPI_XIAOMI_TP=y/# CONFIG_SPI_XIAOMI_TP is not set/' arch/arm64/configs/vayu_defconfig
           echo "# CONFIG_SPI_XIAOMI_TP is not set" >> arch/arm64/configs/vayu_defconfig
 
-      - name: Integrate SukiSU-Ultra (SUSFS branch)
+      - name: Integrate SukiSU-Ultra (SUSFS)
         working-directory: ./kernel
         run: |
           curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs
 
-      - name: Configure kernel (vayu_defconfig)
+      - name: Configure kernel
         working-directory: ./kernel
         run: |
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- vayu_defconfig
 
-      - name: Build kernel image
+      - name: Build kernel
         working-directory: ./kernel
         run: |
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc) Image.gz-dtb
 
-      - name: Prepare AnyKernel3
+      - name: Package AnyKernel3
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3
           cp kernel/arch/arm64/boot/Image.gz-dtb AnyKernel3/
           cd AnyKernel3
           zip -r9 ../SukiSU-Ultra_vayu_$(date +%Y%m%d_%H%M%S).zip *
 
-      - name: Upload flashable kernel
+      - name: Upload kernel
         uses: actions/upload-artifact@v4
         with:
           name: SukiSU-Ultra_vayu_Kernel
