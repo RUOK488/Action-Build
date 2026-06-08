@@ -6,11 +6,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout builder
-        uses: actions/checkout@v4
-        with:
-          path: builder
-
       - name: Install dependencies
         run: |
           sudo apt update
@@ -20,31 +15,37 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/RUOK488/android_kernel_vayu -b 16 kernel
 
-      - name: Setup Clang toolchain
+      - name: Setup Clang toolchain (Proton-Clang)
         run: |
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
-          echo "PATH=$(pwd)/clang/bin:$PATH" >> $GITHUB_ENV
-          echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
-          echo "CROSS_COMPILE_ARM32=arm-linux-gnueabi-" >> $GITHUB_ENV
-          echo "CC=clang" >> $GITHUB_ENV
-          echo "LD=ld.lld" >> $GITHUB_ENV
-          echo "AR=llvm-ar" >> $GITHUB_ENV
-          echo "NM=llvm-nm" >> $GITHUB_ENV
-          echo "OBJCOPY=llvm-objcopy" >> $GITHUB_ENV
+          echo "CLANG_PATH=$(pwd)/clang/bin" >> $GITHUB_ENV
 
-      - name: Integrate SukiSU-Ultra (with SUSFS)
+      - name: Integrate SukiSU-Ultra (SUSFS branch)
         working-directory: ./kernel
         run: |
-          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-main
+          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs
 
-      - name: Configure kernel (vayu_defconfig)
+      - name: Configure kernel (vayu_defconfig) - using system tools for host
         working-directory: ./kernel
         run: |
+          export PATH=/usr/bin:$PATH
+          export HOSTCC=gcc
+          export HOSTLD=ld
           make ARCH=arm64 vayu_defconfig
 
-      - name: Build kernel
+      - name: Build kernel image - using Clang for cross-compilation
         working-directory: ./kernel
         run: |
+          export PATH=$CLANG_PATH:/usr/bin:$PATH
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          export CC=clang
+          export LD=ld.lld
+          export AR=llvm-ar
+          export NM=llvm-nm
+          export OBJCOPY=llvm-objcopy
+          export HOSTCC=gcc
+          export HOSTLD=ld
           make ARCH=arm64 -j$(nproc) Image.gz-dtb
 
       - name: Prepare AnyKernel3
