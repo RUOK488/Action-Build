@@ -1,4 +1,4 @@
-name: Build for Poco X3 Pro (vayu) with SukiSU-Ultra (Final Fix)
+name: Build for Poco X3 Pro (vayu) with SukiSU-Ultra (KPM fixed)
 on:
   workflow_dispatch:
 
@@ -26,14 +26,11 @@ jobs:
           cat include/linux/compiler_types.h >> include/linux/compiler_types.h.new
           mv include/linux/compiler_types.h.new include/linux/compiler_types.h
 
-      - name: Remove broken touchscreen driver completely
+      - name: Remove broken touchscreen driver
         run: |
           cd kernel
-          # Remove the source file
           rm -f drivers/input/touchscreen/spi-xiaomi-tp.c
-          # Remove the entry from Makefile
           sed -i '/spi-xiaomi-tp/d' drivers/input/touchscreen/Makefile
-          # Disable config option
           sed -i 's/^CONFIG_SPI_XIAOMI_TP=y/# CONFIG_SPI_XIAOMI_TP is not set/' arch/arm64/configs/vayu_defconfig
           echo "# CONFIG_SPI_XIAOMI_TP is not set" >> arch/arm64/configs/vayu_defconfig
 
@@ -41,6 +38,13 @@ jobs:
         working-directory: ./kernel
         run: |
           curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs
+
+      - name: Fix KPM access_ok for older kernel (4.14)
+        run: |
+          cd kernel
+          # Convert 2‑argument access_ok to 3‑argument (type, addr, size)
+          # We add VERIFY_READ as the first argument
+          sed -i 's/access_ok(\([^,]*\), \([^)]*\))/access_ok(VERIFY_READ, \1, \2)/g' drivers/kernelsu/kpm/kpm.c
 
       - name: Configure kernel
         working-directory: ./kernel
