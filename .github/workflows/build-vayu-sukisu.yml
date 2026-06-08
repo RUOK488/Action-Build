@@ -1,4 +1,4 @@
-name: Build for Poco X3 Pro (vayu) with SukiSU-Ultra (KPM fixed)
+name: Build SukiSU-Ultra Kernel for POCO X3 Pro (vayu)
 on:
   workflow_dispatch:
 
@@ -14,10 +14,9 @@ jobs:
           sudo update-alternatives --set aarch64-linux-gnu-gcc /usr/bin/aarch64-linux-gnu-gcc-9
 
       - name: Clone kernel source
-        run: |
-          git clone --depth=1 https://github.com/RUOK488/android_kernel_vayu -b 16 kernel
+        run: git clone --depth=1 https://github.com/RUOK488/android_kernel_vayu -b 16 kernel
 
-      - name: Patch compiler_types.h
+      - name: Patch compiler_types.h (fix __has_attribute)
         run: |
           cd kernel
           echo '#ifndef __has_attribute' > include/linux/compiler_types.h.new
@@ -34,36 +33,33 @@ jobs:
           sed -i 's/^CONFIG_SPI_XIAOMI_TP=y/# CONFIG_SPI_XIAOMI_TP is not set/' arch/arm64/configs/vayu_defconfig
           echo "# CONFIG_SPI_XIAOMI_TP is not set" >> arch/arm64/configs/vayu_defconfig
 
-      - name: Integrate SukiSU-Ultra (SUSFS)
+      - name: Disable KPM (avoids 4.14 compatibility error)
+        run: |
+          cd kernel
+          sed -i 's/^CONFIG_KPM=y/# CONFIG_KPM is not set/' arch/arm64/configs/vayu_defconfig
+          echo "# CONFIG_KPM is not set" >> arch/arm64/configs/vayu_defconfig
+
+      - name: Integrate SukiSU-Ultra (SUSFS branch)
         working-directory: ./kernel
         run: |
           curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs
 
-      - name: Fix KPM access_ok for older kernel (4.14)
-        run: |
-          cd kernel
-          # Convert 2‑argument access_ok to 3‑argument (type, addr, size)
-          # We add VERIFY_READ as the first argument
-          sed -i 's/access_ok(\([^,]*\), \([^)]*\))/access_ok(VERIFY_READ, \1, \2)/g' drivers/kernelsu/kpm/kpm.c
-
       - name: Configure kernel
         working-directory: ./kernel
-        run: |
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- vayu_defconfig
+        run: make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- vayu_defconfig
 
       - name: Build kernel
         working-directory: ./kernel
-        run: |
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc) Image.gz-dtb
+        run: make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc) Image.gz-dtb
 
-      - name: Package AnyKernel3
+      - name: Package with AnyKernel3
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3
           cp kernel/arch/arm64/boot/Image.gz-dtb AnyKernel3/
           cd AnyKernel3
           zip -r9 ../SukiSU-Ultra_vayu_$(date +%Y%m%d_%H%M%S).zip *
 
-      - name: Upload kernel
+      - name: Upload flashable kernel
         uses: actions/upload-artifact@v4
         with:
           name: SukiSU-Ultra_vayu_Kernel
