@@ -1,4 +1,4 @@
-name: Build SukiSU-Ultra Kernel for POCO X3 Pro (vayu)
+name: Build ReSukiSU+SUSFS Kernel for POCO X3 Pro (vayu)
 on:
   workflow_dispatch:
 
@@ -33,16 +33,17 @@ jobs:
           sed -i 's/^CONFIG_SPI_XIAOMI_TP=y/# CONFIG_SPI_XIAOMI_TP is not set/' arch/arm64/configs/vayu_defconfig
           echo "# CONFIG_SPI_XIAOMI_TP is not set" >> arch/arm64/configs/vayu_defconfig
 
-      - name: Disable KPM (avoids 4.14 compatibility error)
+      - name: Disable KPM and force manual hook
         run: |
           cd kernel
           sed -i 's/^CONFIG_KPM=y/# CONFIG_KPM is not set/' arch/arm64/configs/vayu_defconfig
           echo "# CONFIG_KPM is not set" >> arch/arm64/configs/vayu_defconfig
+          echo "CONFIG_KSU_MANUAL_HOOK=y" >> arch/arm64/configs/vayu_defconfig
 
-      - name: Integrate SukiSU-Ultra (SUSFS branch)
+      - name: Integrate ReSukiSU with SUSFS (builtin method)
         working-directory: ./kernel
         run: |
-          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs
+          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s susfs-main
 
       - name: Configure kernel
         working-directory: ./kernel
@@ -57,10 +58,10 @@ jobs:
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3
           cp kernel/arch/arm64/boot/Image.gz-dtb AnyKernel3/
           cd AnyKernel3
-          zip -r9 ../SukiSU-Ultra_vayu_$(date +%Y%m%d_%H%M%S).zip *
+          zip -r9 ../ReSukiSU_vayu_$(date +%Y%m%d_%H%M%S).zip *
 
       - name: Upload flashable kernel
         uses: actions/upload-artifact@v4
         with:
-          name: SukiSU-Ultra_vayu_Kernel
-          path: SukiSU-Ultra_vayu_*.zip
+          name: ReSukiSU_vayu_Kernel
+          path: ReSukiSU_vayu_*.zip
