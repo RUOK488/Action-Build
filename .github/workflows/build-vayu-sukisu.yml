@@ -1,4 +1,4 @@
-name: Build for Poco X3 Pro (vayu) with SukiSU-Ultra (Fixed)
+name: Build for Poco X3 Pro (vayu) with SukiSU-Ultra (GCC9)
 on:
   workflow_dispatch:
 
@@ -6,21 +6,34 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Install dependencies
+      - name: Install dependencies (including GCC 9)
         run: |
           sudo apt update
-          sudo apt install -y device-tree-compiler lz4 bc bison flex libssl-dev libelf-dev gcc-aarch64-linux-gnu
+          sudo apt install -y device-tree-compiler lz4 bc bison flex libssl-dev libelf-dev
+          # Install GCC 9 for cross-compilation
+          sudo apt install -y gcc-9-aarch64-linux-gnu g++-9-aarch64-linux-gnu
+          # Set alternatives to make gcc-9 the default for aarch64
+          sudo update-alternatives --install /usr/bin/aarch64-linux-gnu-gcc aarch64-linux-gnu-gcc /usr/bin/aarch64-linux-gnu-gcc-9 100
+          sudo update-alternatives --set aarch64-linux-gnu-gcc /usr/bin/aarch64-linux-gnu-gcc-9
 
       - name: Clone kernel source (your fork, branch 16)
         run: |
           git clone --depth=1 https://github.com/RUOK488/android_kernel_vayu -b 16 kernel
 
+      - name: Patch compiler_types.h (fix __has_attribute error)
+        run: |
+          cd kernel
+          # Add fallback definition at the very top of compiler_types.h
+          echo '#ifndef __has_attribute' > include/linux/compiler_types.h.new
+          echo '#define __has_attribute(x) 0' >> include/linux/compiler_types.h.new
+          echo '#endif' >> include/linux/compiler_types.h.new
+          cat include/linux/compiler_types.h >> include/linux/compiler_types.h.new
+          mv include/linux/compiler_types.h.new include/linux/compiler_types.h
+
       - name: Disable broken touchscreen driver (spi-xiaomi-tp)
         run: |
           cd kernel
-          # Comment out the line that enables the broken driver
           sed -i 's/^CONFIG_SPI_XIAOMI_TP=y/# CONFIG_SPI_XIAOMI_TP is not set/' arch/arm64/configs/vayu_defconfig
-          # Also ensure it's not accidentally set later
           echo "# CONFIG_SPI_XIAOMI_TP is not set" >> arch/arm64/configs/vayu_defconfig
 
       - name: Integrate SukiSU-Ultra (SUSFS branch)
