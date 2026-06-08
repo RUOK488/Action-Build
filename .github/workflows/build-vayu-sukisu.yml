@@ -1,4 +1,4 @@
-name: Build for Poco X3 Pro (vayu) with SukiSU-Ultra (GCC9)
+name: Build for Poco X3 Pro (vayu) with SukiSU-Ultra (Final)
 on:
   workflow_dispatch:
 
@@ -6,13 +6,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Install dependencies (including GCC 9)
+      - name: Install dependencies (GCC 9)
         run: |
           sudo apt update
-          sudo apt install -y device-tree-compiler lz4 bc bison flex libssl-dev libelf-dev
-          # Install GCC 9 for cross-compilation
-          sudo apt install -y gcc-9-aarch64-linux-gnu g++-9-aarch64-linux-gnu
-          # Set alternatives to make gcc-9 the default for aarch64
+          sudo apt install -y device-tree-compiler lz4 bc bison flex libssl-dev libelf-dev gcc-9-aarch64-linux-gnu
           sudo update-alternatives --install /usr/bin/aarch64-linux-gnu-gcc aarch64-linux-gnu-gcc /usr/bin/aarch64-linux-gnu-gcc-9 100
           sudo update-alternatives --set aarch64-linux-gnu-gcc /usr/bin/aarch64-linux-gnu-gcc-9
 
@@ -23,16 +20,18 @@ jobs:
       - name: Patch compiler_types.h (fix __has_attribute error)
         run: |
           cd kernel
-          # Add fallback definition at the very top of compiler_types.h
           echo '#ifndef __has_attribute' > include/linux/compiler_types.h.new
           echo '#define __has_attribute(x) 0' >> include/linux/compiler_types.h.new
           echo '#endif' >> include/linux/compiler_types.h.new
           cat include/linux/compiler_types.h >> include/linux/compiler_types.h.new
           mv include/linux/compiler_types.h.new include/linux/compiler_types.h
 
-      - name: Disable broken touchscreen driver (spi-xiaomi-tp)
+      - name: Remove broken touchscreen driver (spi-xiaomi-tp)
         run: |
           cd kernel
+          # Delete the source file that requires missing header
+          rm -f drivers/input/touchscreen/spi-xiaomi-tp.c
+          # Also disable the config option (safety)
           sed -i 's/^CONFIG_SPI_XIAOMI_TP=y/# CONFIG_SPI_XIAOMI_TP is not set/' arch/arm64/configs/vayu_defconfig
           echo "# CONFIG_SPI_XIAOMI_TP is not set" >> arch/arm64/configs/vayu_defconfig
 
