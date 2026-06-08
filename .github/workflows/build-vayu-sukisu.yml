@@ -1,4 +1,4 @@
-name: Build for Poco X3 Pro (vayu) with SukiSU-Ultra (Patched)
+name: Build for Poco X3 Pro (vayu) with SukiSU-Ultra (Fixed)
 on:
   workflow_dispatch:
 
@@ -15,11 +15,13 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/RUOK488/android_kernel_vayu -b 16 kernel
 
-      - name: Patch compiler_types.h (fix __has_attribute error)
+      - name: Disable broken touchscreen driver (spi-xiaomi-tp)
         run: |
           cd kernel
-          # Add a fallback definition for __has_attribute at the top of the file
-          sed -i '1i#ifndef __has_attribute\n#define __has_attribute(x) 0\n#endif' include/linux/compiler_types.h
+          # Comment out the line that enables the broken driver
+          sed -i 's/^CONFIG_SPI_XIAOMI_TP=y/# CONFIG_SPI_XIAOMI_TP is not set/' arch/arm64/configs/vayu_defconfig
+          # Also ensure it's not accidentally set later
+          echo "# CONFIG_SPI_XIAOMI_TP is not set" >> arch/arm64/configs/vayu_defconfig
 
       - name: Integrate SukiSU-Ultra (SUSFS branch)
         working-directory: ./kernel
